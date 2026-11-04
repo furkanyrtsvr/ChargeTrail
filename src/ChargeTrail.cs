@@ -70,6 +70,19 @@ namespace PilTakip
             if (d.Run.PcSeconds == 0 && d.Run.VisibleSeconds == 0 && d.Run.ActiveSeconds == 0) d.Run.Started = DateTime.UtcNow.ToString("o");
             d.Enabled = true; d.ActiveUntil = 0;
         }
+        public static void Reset(TrackedDevice d, int idle)
+        {
+            var previous = d.Run;
+            d.Enabled = false; d.ActiveUntil = 0;
+            d.Run = Fresh(d, idle);
+            d.Run.Notes = previous.Notes; d.Run.PollingRate = previous.PollingRate;
+        }
+        public static bool RemoveManual(State state, TrackedDevice d)
+        {
+            if (!d.Manual) return false;
+            d.Enabled = false; d.ActiveUntil = 0;
+            return state.Devices.Remove(d);
+        }
     }
     public class MainForm : Form
     {
@@ -91,6 +104,7 @@ namespace PilTakip
         string error = "";
         string page = "home";
         string diagnosticDialogFolder;
+        Func<bool> diagnosticConfirmation;
         [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
         [DllImport("user32.dll")] static extern bool RedrawWindow(IntPtr window, IntPtr rect, IntPtr region, uint flags);
         bool English { get { return state.Language == "EN"; } }
@@ -148,7 +162,7 @@ namespace PilTakip
                 navigation[target] = b;
                 side.Controls.Add(b); y += 59;
             }
-            var bottom = TextLabel("CHARGE. USE. REMEMBER.\n\nv2.0.1  /  Local & private", 8, Color.FromArgb(155, 177, 165));
+            var bottom = TextLabel("CHARGE. USE. REMEMBER.\n\nv2.0.2  /  Local & private", 8, Color.FromArgb(155, 177, 165));
             bottom.AutoSize = false; bottom.Dock = DockStyle.Bottom; bottom.Height = 92; bottom.Padding = new Padding(24, 12, 0, 0); side.Controls.Add(bottom);
             shell.Controls.Add(side, 0, 0);
             var right = new BufferedLayout { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(30, 22, 30, 12), Margin = Padding.Empty };
@@ -249,10 +263,10 @@ namespace PilTakip
         }
         void AddCard(TrackedDevice d)
         {
-            var card = new BufferedPanel { Height = 276, BackColor = Color.White, Margin = new Padding(0, 0, 14, 16), Padding = new Padding(20) };
+            var card = new BufferedPanel { Height = 322, BackColor = Color.White, Margin = new Padding(0, 0, 14, 16), Padding = new Padding(20) };
             card.Paint += delegate(object s, PaintEventArgs e) { using (var p = new Pen(Brand.Line)) e.Graphics.DrawRectangle(p, 0, 0, card.Width - 1, card.Height - 1); };
-            var layout = new BufferedLayout { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Margin = Padding.Empty, BackColor = Color.White };
-            foreach (int height in new[] { 23, 35, 59, 29, 35, 47 }) layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+            var layout = new BufferedLayout { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 7, Margin = Padding.Empty, BackColor = Color.White };
+            foreach (int height in new[] { 23, 35, 59, 29, 35, 47, 40 }) layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
             var kind = TextLabel(Kind(d) + (d.Manual ? "" : "   /   " + Connection(d.Connection)), 8, Brand.Green, true); kind.Dock = DockStyle.Fill; layout.Controls.Add(kind, 0, 0);
             var name = TextLabel(d.Name, 17, Brand.Ink, true); name.AutoSize = false; name.AutoEllipsis = true; name.Dock = DockStyle.Fill; layout.Controls.Add(name, 0, 1);
             var time = TextLabel("00:00:00", 32, Brand.Ink, true); time.Font = new Font("Consolas", 31, FontStyle.Bold); time.Dock = DockStyle.Fill; layout.Controls.Add(time, 0, 2);
@@ -263,7 +277,18 @@ namespace PilTakip
             var save = Btn(T("Kaydet", "Save record"), delegate { SaveRecord(d); }, true);
             var edit = Btn(T("Detaylar", "Details"), delegate { EditDevice(d); });
             foreach (var b in new[] { toggle, save, edit }) { b.Padding = new Padding(9, 4, 9, 4); b.MinimumSize = new Size(60, 36); b.Margin = new Padding(0, 0, 6, 0); buttons.Controls.Add(b); }
-            layout.Controls.Add(buttons, 0, 5); card.Controls.Add(layout); cardFlow.Controls.Add(card);
+            layout.Controls.Add(buttons, 0, 5);
+            var manage = Actions(); manage.Padding = Padding.Empty;
+            var reset = Btn(T("Sıfırla", "Reset"), delegate { ResetDevice(d); });
+            reset.Font = new Font("Segoe UI", 9); reset.FlatAppearance.BorderSize = 0; reset.ForeColor = Brand.Muted;
+            manage.Controls.Add(reset);
+            if (d.Manual)
+            {
+                var remove = Btn(T("Sil", "Delete"), delegate { DeleteManual(d); });
+                remove.Font = new Font("Segoe UI", 9); remove.FlatAppearance.BorderSize = 0; remove.ForeColor = Color.Firebrick;
+                manage.Controls.Add(remove);
+            }
+            layout.Controls.Add(manage, 0, 6); card.Controls.Add(layout); cardFlow.Controls.Add(card);
             cards[d] = new CardView { Panel = card, Time = time, Active = active, Status = badge, Toggle = toggle, Save = save };
         }
         void Toggle(TrackedDevice d)
@@ -276,6 +301,25 @@ namespace PilTakip
                 Records.Start(d, state.IdleSeconds);
             }
             Persist(); UpdateLive();
+        }
+        bool Confirm(string tr, string en)
+        {
+            if (diagnosticConfirmation != null) return diagnosticConfirmation();
+            return MessageBox.Show(this, T(tr, en), "ChargeTrail", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
+        }
+        void ResetDevice(TrackedDevice d)
+        {
+            if (!Confirm(d.Name + " için mevcut süre sıfırlansın mı?\n\nKaydedilmemiş süre silinir. Kayıtlar arşivi ve kullanım notların korunur. Sayaç duraklatılmış başlayacak.", "Reset the current time for " + d.Name + "?\n\nUnsaved time will be discarded. Saved records and your usage notes stay intact. The tracker will be paused.")) return;
+            TickCounters(); Records.Reset(d, state.IdleSeconds); Persist(); UpdateLive();
+        }
+        bool ConfirmManualDelete(TrackedDevice d)
+        {
+            return d.Manual && Confirm(d.Name + " manuel sayacı silinsin mi?\n\nBu sayacın kaydedilmemiş süresi silinir. Önceden kaydettiğin sonuçlar Kayıtlar'da kalır.", "Delete the manual tracker " + d.Name + "?\n\nIts unsaved time will be discarded. Previously saved results stay in Records.");
+        }
+        void DeleteManual(TrackedDevice d)
+        {
+            if (!ConfirmManualDelete(d)) return;
+            TickCounters(); Records.RemoveManual(state, d); Persist(); BuildPage();
         }
         void SaveRecord(TrackedDevice d)
         {
@@ -406,8 +450,16 @@ namespace PilTakip
                 var pin = new CheckBox { Text = T("Ana ekranda göster", "Show on overview"), Checked = d.Pinned, AutoSize = true }; layout.Controls.Add(pin);
                 var hint = TextLabel(d.Manual ? T("Cihaz uyusa bile PC uyanıkken sayar.", "Counts PC uptime even when the device sleeps.") : T("Cihaz/alıcı görünürlüğü ve tahmini girdi etkinliği ölçülür.", "Measures device/receiver presence and estimated input activity."), 9, Brand.Muted); hint.MaximumSize = new Size(470, 60); layout.Controls.Add(hint);
                 var buttons = Actions(); var save = Btn(T("Kaydet", "Save"), null, true); save.DialogResult = DialogResult.OK; var cancel = Btn(T("İptal", "Cancel"), null); cancel.DialogResult = DialogResult.Cancel; buttons.Controls.Add(save); buttons.Controls.Add(cancel); layout.Controls.Add(buttons);
+                if (d.Manual)
+                {
+                    var remove = Btn(T("Manuel sayacı sil", "Delete manual tracker"), null); remove.ForeColor = Color.Firebrick;
+                    remove.Click += delegate { if (ConfirmManualDelete(d)) dialog.DialogResult = DialogResult.Abort; };
+                    layout.Controls.Add(remove);
+                }
                 dialog.Controls.Add(layout); dialog.AcceptButton = save; dialog.CancelButton = cancel;
-                if (dialog.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(name.Text)) return;
+                var result = dialog.ShowDialog(this);
+                if (result == DialogResult.Abort) { TickCounters(); Records.RemoveManual(state, d); Persist(); BuildPage(); return; }
+                if (result != DialogResult.OK || string.IsNullOrWhiteSpace(name.Text)) return;
                 d.Name = name.Text.Trim(); d.Connection = ((Choice)link.SelectedItem).Value; d.Pinned = pin.Checked;
                 if (d.Run.Ended == null) { d.Run.Name = d.Name; d.Run.Connection = d.Connection; }
                 Persist(); BuildPage();
@@ -448,8 +500,8 @@ namespace PilTakip
             var idle = new NumericUpDown { Minimum = 1, Maximum = 600, Value = Math.Max(1, Math.Min(600, state.IdleSeconds)), Width = 100, Margin = new Padding(0, 10, 0, 24) };
             idle.ValueChanged += delegate { state.IdleSeconds = (int)idle.Value; Persist(); }; body.Controls.Add(idle);
             var guide = TextLabel(T(
-                "MANUEL PC SÜRESİ\nTakip açıkken PC'nin uyanık kaldığı süreyi biriktirir. Mouse uyusa, Hz düşse veya bağlantı kesilse de sayar. PC uyku/kapalı süresi sayılmaz.\n\nCİHAZ TAKİBİ\nGörünür süre, Windows'un cihazı/alıcıyı listelediği süredir. Etkin süre, o cihazdan gelen girdilerden sonraki etkinlik pencerelerini sayar. Bu değerler doğrudan pil ölçümü değildir; bazı alıcılar cihaz kapalıyken de görünür.\n\nKAYITLAR\nPil bitince karttaki Kaydet'i kullan. Sonuç ve notlar Kayıtlar'a gider. Kaydı açıp Hz, 2.4 GHz, RGB ve kullanım koşullarını not edebilirsin. Tekrar şarj ettiğinde karttan Başlat'ı seçerek yeni ölçüme geçebilirsin.\n\nARKA PLAN\nX pencereyi tepsiye alır. Tepsiden Çık seçersen takip durur. Windows ile başlat açıkken oturum açınca devam eder. Kayıtlar 5 saniyede bir yerel olarak yazılır; tuş içeriği kaydedilmez.",
-                "MANUAL PC UPTIME\nAccumulates time while your PC is awake and tracking is enabled. Device sleep, lower polling rate or disconnection do not stop it. PC sleep and shutdown time are excluded.\n\nDEVICE TRACKING\nPresence time measures when Windows lists the device/receiver. Active time counts activity windows following input from that device. These are not direct battery readings; some receivers remain visible when the device is off.\n\nRECORDS\nWhen the battery runs out, use Save record on its card. Your result and notes go to Records. Open a record to note polling rate, 2.4 GHz, RGB and usage conditions. After charging again, choose Start on the card for a fresh measurement.\n\nBACKGROUND\nX hides the window to the tray. Exit from the tray stops tracking. Start with Windows resumes after sign-in. Records are saved locally every 5 seconds; key contents are never stored."), 10, Brand.Muted);
+                "MANUEL PC SÜRESİ\nTakip açıkken PC'nin uyanık kaldığı süreyi biriktirir. Mouse uyusa, Hz düşse veya bağlantı kesilse de sayar. PC uyku/kapalı süresi sayılmaz.\n\nCİHAZ TAKİBİ\nGörünür süre, Windows'un cihazı/alıcıyı listelediği süredir. Etkin süre, o cihazdan gelen girdilerden sonraki etkinlik pencerelerini sayar. Bu değerler doğrudan pil ölçümü değildir; bazı alıcılar cihaz kapalıyken de görünür.\n\nKAYITLAR\nPil bitince karttaki Kaydet'i kullan. Sonuç ve notlar Kayıtlar'a gider. Kaydı açıp Hz, 2.4 GHz, RGB ve kullanım koşullarını not edebilirsin. Tekrar şarj ettiğinde karttan Başlat'ı seçerek yeni ölçüme geçebilirsin.\n\nARKA PLAN\nX pencereyi tepsiye alır. Arayüzü kapat seçeneği tepsi simgesini de gizler; sayaç arka planda çalışır. EXE'yi açınca geri gelir. Takibi durdur ve çık ise onay ister ve sayacı durdurur. Karttaki Sıfırla onayla süreyi siler; manuel karttaki Sil sayacı kaldırır. Kayıtlar arşivi korunur. Windows ile başlat açıkken oturum açınca devam eder. Kayıtlar 5 saniyede bir yerel olarak yazılır; tuş içeriği kaydedilmez.",
+                "MANUAL PC UPTIME\nAccumulates time while your PC is awake and tracking is enabled. Device sleep, lower polling rate or disconnection do not stop it. PC sleep and shutdown time are excluded.\n\nDEVICE TRACKING\nPresence time measures when Windows lists the device/receiver. Active time counts activity windows following input from that device. These are not direct battery readings; some receivers remain visible when the device is off.\n\nRECORDS\nWhen the battery runs out, use Save record on its card. Your result and notes go to Records. Open a record to note polling rate, 2.4 GHz, RGB and usage conditions. After charging again, choose Start on the card for a fresh measurement.\n\nBACKGROUND\nX hides the window to the tray. Close interface also hides the tray icon while counters keep running. Reopen the EXE to return. Stop tracking and exit requires confirmation and stops counters. Reset on a card clears time after confirmation; Delete removes a manual tracker. Saved records are preserved. Start with Windows resumes after sign-in. Records are saved locally every 5 seconds; key contents are never stored."), 10, Brand.Muted);
             guide.MaximumSize = new Size(780, 0); body.Controls.Add(guide);
             layout.Controls.Add(body, 0, 2);
         }
@@ -478,7 +530,8 @@ namespace PilTakip
             menu.Items.Add(T("ChargeTrail'i aç", "Open ChargeTrail"), null, delegate { Reveal(); });
             menu.Items.Add(T("Tümünü duraklat", "Pause all"), null, delegate { TickCounters(); foreach (var d in state.Devices) { d.Enabled = false; d.ActiveUntil = 0; } Persist(); UpdateLive(); });
             menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add(T("Çık · takip durur", "Exit · stops tracking"), null, delegate { Quit(); });
+            menu.Items.Add(T("Arayüzü kapat · takip sürer", "Close interface · keep tracking"), null, delegate { HideInterface(); });
+            menu.Items.Add(T("Takibi durdur ve çık", "Stop tracking and exit"), null, delegate { Quit(); });
             tray.ContextMenuStrip = menu; tray.Text = "ChargeTrail · " + T("Arka plan takibi", "Background tracking"); if (old != null) old.Dispose();
         }
         protected override void OnLoad(EventArgs e)
@@ -597,7 +650,8 @@ namespace PilTakip
                 foreach (var d in state.Devices) d.ActiveUntil = 0;
             });
         }
-        void Reveal() { Show(); WindowState = FormWindowState.Normal; Activate(); }
+        void Reveal() { tray.Visible = true; Show(); WindowState = FormWindowState.Normal; Activate(); }
+        void HideInterface() { CommitEdits(); TickCounters(); Persist(); Hide(); tray.Visible = false; }
         void HandleClosing(object sender, FormClosingEventArgs e)
         {
             CommitEdits(); TickCounters(); Persist();
@@ -605,11 +659,36 @@ namespace PilTakip
         }
         void Quit()
         {
+            if (!Confirm("Takibi durdurup ChargeTrail'den tamamen çıkılsın mı?\n\nÇıkıştan sonra süre sayılmaz. Takip sürsün istiyorsan Hayır'ı seç ve tepsiden Arayüzü kapat seçeneğini kullan.", "Stop tracking and exit ChargeTrail completely?\n\nTime will not accumulate after exit. Choose No and use Close interface in the tray to keep tracking.")) return;
             CommitEdits(); TickCounters();
             if (!Persist() && MessageBox.Show(this, T("Son değişiklikler kaydedilemedi. Yine de çıkılsın mı?", "Latest changes could not be saved. Exit anyway?"), "ChargeTrail", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
             exiting = true; Close();
         }
         internal void EndDiagnostics() { exiting = true; Close(); }
+        internal bool HideInterfaceForDiagnostics() { HideInterface(); return !Visible && !tray.Visible && !IsDisposed; }
+        internal bool RevealForDiagnostics() { Reveal(); return Visible && tray.Visible; }
+        internal void CheckManagement()
+        {
+            var d = state.AddManual("Management check"); d.Run.PcSeconds = 30; d.Run.Notes = "1000 Hz"; d.Enabled = true;
+            var before = d.Run; int history = state.History.Count;
+            try
+            {
+                diagnosticConfirmation = delegate { return false; };
+                ResetDevice(d);
+                if (d.Run != before || d.Run.PcSeconds != 30 || !d.Enabled) throw new Exception("Cancelled reset changed the measurement.");
+                DeleteManual(d);
+                if (!state.Devices.Contains(d)) throw new Exception("Cancelled delete removed the tracker.");
+                diagnosticConfirmation = delegate { return true; };
+                ResetDevice(d);
+                if (d.Run.PcSeconds != 0 || d.Enabled || d.Run.Notes != "1000 Hz" || state.History.Count != history) throw new Exception("Confirmed reset did not preserve notes/archive or pause the tracker.");
+                DeleteManual(d);
+                if (state.Devices.Contains(d) || state.History.Count != history) throw new Exception("Confirmed delete affected the archive or retained the tracker.");
+                diagnosticConfirmation = delegate { return false; };
+                Show(); Quit();
+                if (IsDisposed || !timer.Enabled) throw new Exception("Cancelled exit stopped tracking.");
+            }
+            finally { diagnosticConfirmation = null; }
+        }
         internal void CheckNavigation()
         {
             Show();

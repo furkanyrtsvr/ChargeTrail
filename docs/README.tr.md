@@ -10,6 +10,13 @@ v2.0.1 sekme geçişindeki titremeyi düzeltir: menü ve dil seçici yerinde kal
 
 Windows 10/11 x64 için cihaz kullanım ve şarj günlüğü. Tek EXE, Türkçe/İngilizce arayüz, yerel kayıt. Python veya .NET SDK gerektirmez; Windows .NET Framework 4.8 kullanır.
 
+## v2.0.2 — Sıfırlama, silme ve güvenli arka plan
+
+- Genel bakıştaki **Sıfırla**, kaydetmeden de süreyi sıfırlar. Önce onay çıkar ve varsayılan seçim Hayır'dır. Sıfırlama sonrası sayaç duraklatılmış olur; notlar, Hz ve kaydedilmiş sonuçlar korunur.
+- Manuel karttaki **Sil** veya Detaylar'daki **Manuel sayacı sil**, onaydan sonra o sayacı kaldırır. Kaydedilmemiş süre silinir, arşivdeki sonuçlar kalır. Silinen manuel sayaç yeniden açılışta geri gelmez.
+- Tepside **Arayüzü kapat · takip sürer**, pencere ve tepsi simgesini gizler. Takip işlemi arka planda çalışır. EXE'yi yeniden açmak aynı işlemin arayüzünü geri getirir.
+- **Takibi durdur ve çık**, önce onay ister. Tamamen çıkarsanız veya süreci Görev Yöneticisi'nden sonlandırırsanız süre sayılmaz. Uygulama bir Windows servisi değildir; hiçbir süreç çalışmadan canlı takip yapmaz. Oturum açınca devam etmesi için Windows ile arka planda başlat açık olmalıdır.
+
 ## Kullanım
 
 1. `bin/ChargeTrail.exe` dosyasını açın. Sağ üstten **TR / EN** seçebilirsiniz; tercih kaydedilir.
@@ -35,7 +42,7 @@ Pil yüzdesi, otomatik pil bitişi/şarj algılama ve kesin pil kapasitesi ölç
 
 ## Arka plan ve veriler
 
-**Ayarlar ve rehber > Windows ile arka planda başlat** açıkken mevcut kullanıcının oturum açılışında devam eder. Seçenek başlangıçta kapalıdır. EXE `%LOCALAPPDATA%\PilTakip\ChargeTrail.exe` konumuna kopyalanır. X düğmesi pencereyi tepsiye alır; **Çık · takip durur** işlemi tamamen kapatır. İşlem çalışmıyorken PC açık olsa da süre sonradan eklenmez.
+**Ayarlar ve rehber > Windows ile arka planda başlat** açıkken mevcut kullanıcının oturum açılışında devam eder. Seçenek başlangıçta kapalıdır. EXE `%LOCALAPPDATA%\PilTakip\ChargeTrail.exe` konumuna kopyalanır. X düğmesi pencereyi tepsiye alır; **Takibi durdur ve çık**, onaydan sonra işlemi tamamen kapatır. **Arayüzü kapat · takip sürer** ise pencereyi ve simgeyi gizleyip saymaya devam eder. İşlem çalışmıyorken PC açık olsa da süre sonradan eklenmez.
 
 Mevcut sürümden geçişte eski veri klasörü korunur: `%LOCALAPPDATA%\PilTakip\tests.json`. Eski süreler ve kayıtlar aktarılır; takip açık cihazlar ve manuel sayaçlar ilk açılışta ana ekrana sabitlenir. Yerel JSON 5 saniyede bir atomik yazılır ve önceki kayıt `.bak` dosyasında tutulur. Bozuk ana dosya varsa yedekten kurtarılır; hasarlı dosya korunur. Ani kapanmada son kayıttan sonraki süre kaybolabilir. İnternet kullanılmaz.
 
@@ -45,6 +52,6 @@ Kaldırmak için önce Windows ile başlat seçeneğini kapatın, tepsiden çık
 
 `./build.ps1`, Windows Framework C# derleyicisiyle `bin/ChargeTrail.exe` üretir. Logo kaynağı `assets/ChargeTrail.svg`, EXE simgesi `assets/ChargeTrail.ico` dosyalarıdır.
 
-`ChargeTrail.exe --self-test selftest.log` 23 sayaç, kayıt, not, CSV ve uyumluluk kontrolünü çalıştırır. `ChargeTrail.exe --integration-test integration.log` ayrı geçici klasörde gerçek formun ileti döngüsüyle arka plan sayımı, kalıcı kayıt ve yedek kurtarma kontrollerini çalıştırır; TR/EN ekranlarını `ui-preview` altına render eder. Kullanıcı verilerini değiştirmez.
+`ChargeTrail.exe --self-test selftest.log` 30 sayaç, kayıt, not, CSV, silme/sıfırlama ve uyumluluk kontrolünü çalıştırır. `ChargeTrail.exe --integration-test integration.log` ayrı geçici klasörde gerçek formun ileti döngüsüyle arka plan sayımı, kalıcı kayıt ve yedek kurtarma kontrollerini çalıştırır; TR/EN ekranlarını `ui-preview` altına render eder. Kullanıcı verilerini değiştirmez.
 
 Windows API referansları: [Raw Input](https://learn.microsoft.com/en-us/windows/win32/inputdev/about-raw-input), [uykuyu dışlayan saat](https://learn.microsoft.com/en-us/windows/win32/sysinfo/interrupt-time), [aygıtın bildirdiği ad](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/devpkey-device-busreporteddevicedesc).

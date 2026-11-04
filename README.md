@@ -34,6 +34,11 @@ Release files include SHA-256 checksums. Administrator access is not required.
 
 Saving freezes the result; it does not automatically reset the card. CSV export contains saved records, their timing values, polling rates and notes.
 
+### Reset or remove a tracker
+
+- **Reset** is available on every Overview card, even before saving a result. It asks for confirmation (No is selected by default), clears the current time and leaves the tracker paused. Your device settings, polling-rate notes and archived results are preserved. Unsaved time is discarded rather than automatically archived.
+- **Delete** is available on manual tracker cards and in their Details dialog. After confirmation, it removes that manual tracker and its unsaved time. Previously saved results stay in Records. Deleted manual trackers are not recreated on restart.
+
 ## Choose what you want to measure
 
 | Mode | What accumulates | What stops it |
@@ -63,13 +68,15 @@ Automatic tracking does not cover every Bluetooth device class, such as headphon
 
 ## Background tracking and privacy
 
-Closing the window hides ChargeTrail to the system tray and keeps counters running. **Exit · stops tracking** in the tray ends the process. Enable **Start in background with Windows** in Settings to resume enabled trackers after sign-in; this is off by default.
+Closing the window with X hides ChargeTrail to the system tray and keeps counters running. **Close interface · keep tracking** in the tray hides both the window and the tray icon while the same tracker process continues counting. Reopen the EXE to restore the interface; a second tracker is not started.
+
+**Stop tracking and exit** asks for confirmation (No by default) before ending the process. No live measurement happens if the tracker is fully terminated, including through Task Manager. This is a background user process, not a Windows service. Enable **Start in background with Windows** in Settings to resume enabled trackers after sign-in; this is off by default. The process must run for time to accumulate; there is no recovery of time while it is absent.
 
 The application works locally and makes no network requests. It stores device names/identities, durations, settings and the notes you enter. Raw Input processing uses the source device identity; it does not store typed text, key contents or mouse coordinates.
 
 Data lives in `%LOCALAPPDATA%\PilTakip\tests.json`. The legacy folder name is preserved so existing users keep their records. Writes occur every five seconds and when relevant settings change, using atomic replacement and a `.bak` backup. A damaged main file can be recovered from that backup. Abrupt termination can lose the time since the latest write. Startup installs a copy at `%LOCALAPPDATA%\PilTakip\ChargeTrail.exe` for the current user.
 
-To remove the app, disable Start with Windows, exit from the tray and remove the executable copies. Remove the local data folder separately only if you want to erase your journal.
+To remove the app, disable Start with Windows, select Stop tracking and exit in the tray, confirm, and remove the executable copies. If the tray icon is hidden, reopen the EXE first. Remove the local data folder separately only if you want to erase your journal.
 
 ## Build from source
 
@@ -95,3 +102,7 @@ Core checks cover counters, paused/disconnected/locked states, serialization, CS
 ## v2.0.1
 
 Tab navigation keeps the sidebar and language selector alive, buffers nested layouts and presents the replacement page in one redraw. Reselecting the current tab leaves the page intact. Existing counters and charge records are preserved.
+
+## v2.0.2
+
+Adds confirmed Reset on Overview cards, deletion of manual trackers, a background-only interface-close action and confirmation before fully stopping the tracker. Reset and deletion preserve saved records. Existing data remains compatible.

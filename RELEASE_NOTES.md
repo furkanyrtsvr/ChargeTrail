@@ -1,33 +1,29 @@
-## ChargeTrail v2.0.1
+## ChargeTrail v2.0.2
 
-Track a charge, save the result, remember the conditions.
+### New
 
-### Features
+- **Reset** on every Overview card. Reset without saving first; confirm before unsaved time is discarded. The counter starts paused at zero. Notes, settings and saved results stay intact.
+- **Delete** on manual cards and in their Details dialog. Deletion requires confirmation and preserves previous results in Records.
+- **Close interface · keep tracking** in the tray. Hides the window and tray icon while the tracker process continues. Reopen the EXE to return to the same tracker.
+- **Stop tracking and exit** now asks for confirmation, with No selected by default.
 
-- Selected equipment on overview cards; a separate collection of Windows input devices.
-- Manual PC uptime counters and automatic device-presence/estimated-activity tracking.
-- Background tray operation and optional start with Windows.
-- Saved charge records with editable polling-rate and usage notes, plus CSV export.
-- Turkish and English interfaces with a custom app logo/icon.
+### Validation
 
-### Fix
-
-Tab switching keeps the sidebar and language selector alive, buffers nested layouts and redraws only the replacement content. Clicking the current tab does not rebuild the page.
+30 core checks passed. Windows integration checks also cover reset/delete confirmation and cancellation, background-only counting and reopening, and cancelled exit preserving tracking. The earlier smooth-navigation fix is retained.
 
 ### Download
 
-Windows 10/11 x64 with .NET Framework 4.8. Run `ChargeTrail.exe` directly or extract `ChargeTrail-windows-x64.zip`. `SHA256SUMS.txt` contains checksums.
+Windows 10/11 x64 with .NET Framework 4.8. Run `ChargeTrail.exe` directly or extract `ChargeTrail-windows-x64.zip`. Checksums are in `SHA256SUMS.txt`. Existing records and counters are preserved during upgrade.
 
-### Measurement note
-
-The app measures awake PC time, Windows device presence and estimated input activity. It does not directly verify whether a wireless device is physically on or detect an empty battery. Start after charging and save when you observe the battery has run out. Receivers can remain visible when their devices are off.
+Closing the interface leaves a background user process running. It is not a Windows service: if you fully stop or kill that process, time does not accumulate. Enable Start with Windows to resume after sign-in. Device sleep is included in manual PC uptime, while PC sleep/shutdown is excluded.
 
 ---
 
 ### Türkçe
 
-Cihaz testi yaparken geçen süreyi takip edin, pil bittiğinde sonucu kaydedin ve 1000 Hz / 2.4 GHz / RGB kapalı gibi kullanım koşullarını not edin. Manuel PC sayacı, cihaz kartları, kayıt arşivi, düzenlenebilir notlar, CSV ve TR/EN desteği bulunur.
+- Genel bakış kartlarına **Sıfırla** eklendi. Kaydetmeden de sıfırlanabilir; önce onay istenir. Sayaç sıfırdan duraklatılmış başlar. Notlar ve arşiv korunur.
+- Manuel sayaçlara **Sil** eklendi. Onaydan sonra sayaç kaldırılır; kaydedilmiş sonuçlar Kayıtlar'da kalır.
+- Tepside **Arayüzü kapat · takip sürer**, pencereyi ve tepsi simgesini gizleyip arka planda saymaya devam eder. EXE'yi tekrar açınca geri gelir.
+- **Takibi durdur ve çık** artık ayrıca onay ister; varsayılan seçim Hayır'dır.
 
-Bu sürüm sekme geçişindeki yeniden yüklenme/titreme sorununu düzeltir. Menü ve dil seçici yerinde kalır; yalnızca içerik değiştirilir. Mevcut sayaçlar ve kayıtlar korunur.
-
-Manuel mod PC'nin uyanık süresini ölçer. Otomatik mod cihazın Windows'ta görünmesini ve tahmini girdi etkinliğini takip eder; fiziksel cihazın açık olduğunu veya pilin bittiğini kesin algılamaz.
+Hiçbir takip süreci çalışmıyorsa ölçüm yapılamaz. Görev Yöneticisi'nden sonlandırmak takibi durdurur; otomatik açılış için Windows ile başlat seçeneğini kullanın. Bu sürüm mevcut verileri korur.

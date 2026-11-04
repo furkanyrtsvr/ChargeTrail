@@ -288,6 +288,8 @@ namespace PilTakip
                             Check(!form.IsDisposed && !form.Visible, "close to tray");
                             beforeHide = device.Run.VisibleSeconds;
                         }
+                        if (step == 2) Check(form.HideInterfaceForDiagnostics(), "background-only interface close");
+                        if (step == 3) Check(form.RevealForDiagnostics(), "reopen background-only interface");
                         if (step < 4) return;
                         Check(device.Run.VisibleSeconds > beforeHide + 2, "background counting");
                         var saved = Storage.Load();
@@ -304,7 +306,8 @@ namespace PilTakip
                         data.History.Add(new TestRun { Name = "SC380 Pro", Manual = true, PcSeconds = 96422, Started = DateTime.UtcNow.AddDays(-4).ToString("o"), Ended = DateTime.UtcNow.ToString("o"), PollingRate = "1000", Notes = "2.4 GHz · RGB kapalı / off" });
                         form.CaptureDiagnostics(Path.Combine(Path.GetDirectoryName(output), "ui-preview"));
                         form.CheckNavigation();
-                        File.WriteAllText(output, "PASS: live timer, close to tray, background counting, periodic save, restart state, backup recovery, manual live/background counting without device, manual save/restore, 12 tab transitions preserving the shell/sidebar, reselecting current tab does not rebuild, no hidden/duplicate content.\r\nIsolated test data: " + Storage.Folder, Encoding.UTF8);
+                        form.CheckManagement();
+                        File.WriteAllText(output, "PASS: live timer, close to tray, background-only mode and reopening, durable save/recovery, manual counting, stable navigation, reset/delete cancellation and confirmation, cancelled exit preserves tracking.\r\nIsolated test data: " + Storage.Folder, Encoding.UTF8);
                     }
                     catch (Exception ex) { File.WriteAllText(output, ex.ToString(), Encoding.UTF8); Environment.ExitCode = 1; }
                     if (step >= 4 || Environment.ExitCode != 0) { tick.Stop(); form.EndDiagnostics(); }
@@ -373,7 +376,27 @@ namespace PilTakip
                     var legacy = (State)new DataContractJsonSerializer(typeof(State)).ReadObject(stream);
                     Check(!legacy.DashboardInitialized && legacy.Devices.Count == 0, "legacy data compatibility");
                 }
-                File.WriteAllText(output, "PASS: 23 checks\r\nNative devices: " + found.Count + "\r\n" + string.Join("\r\n", found.Select(x => x.Name + " | " + x.Kind + " | " + x.Transport + " | " + x.Id)), Encoding.UTF8);
+                var management = new State { ManualInitialized = true };
+                var removable = management.AddManual("Disposable tracker");
+                removable.Run.PcSeconds = 600; removable.Run.Notes = "RGB off"; removable.Run.PollingRate = "1000";
+                Records.Archive(management, removable);
+                var preservedRecord = management.History[0];
+                Records.Reset(removable, 45);
+                Check(!removable.Enabled && removable.Run.PcSeconds == 0 && removable.Run.Ended == null && removable.ActiveUntil == 0, "reset saved tracker to paused zero");
+                Check(removable.Pinned && removable.Run.Notes == "RGB off" && removable.Run.PollingRate == "1000", "reset preserves settings and notes");
+                Check(management.History.Count == 1 && preservedRecord.PcSeconds == 600 && preservedRecord.Ended != null, "reset never changes saved records");
+                Records.Start(removable, 45); Counter.Advance(removable, 0, 5, false); Records.Reset(removable, 45);
+                Check(removable.Run.PcSeconds == 0 && management.History.Count == 1, "reset unsaved running time without archiving");
+                Check(Records.RemoveManual(management, removable) && management.Devices.Count == 0 && management.History[0] == preservedRecord, "delete manual preserves archive");
+                management.Devices.Add(d);
+                Check(!Records.RemoveManual(management, d) && management.Devices.Count == 1, "physical device cannot be removed as manual");
+                using (var stream = new MemoryStream())
+                {
+                    var serializer = new DataContractJsonSerializer(typeof(State)); serializer.WriteObject(stream, management); stream.Position = 0;
+                    var read = (State)serializer.ReadObject(stream);
+                    Check(read.ManualInitialized && !read.Devices.Any(x => x.Manual) && read.History.Count == 1, "deleted manual stays absent after reload");
+                }
+                File.WriteAllText(output, "PASS: 30 checks\r\nNative devices: " + found.Count + "\r\n" + string.Join("\r\n", found.Select(x => x.Name + " | " + x.Kind + " | " + x.Transport + " | " + x.Id)), Encoding.UTF8);
             }
             catch (Exception ex) { File.WriteAllText(output, ex.ToString(), Encoding.UTF8); Environment.ExitCode = 1; }
         }
