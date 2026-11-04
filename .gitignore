@@ -1,0 +1,8 @@
+bin/
+build/
+dist/
+*.log
+*.png
+!assets/ChargeTrail.png
+!docs/images/*.png
+ui-preview/

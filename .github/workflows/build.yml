@@ -1,0 +1,26 @@
+name: Windows build
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build portable executable
+        shell: pwsh
+        run: ./build.ps1
+      - name: Run core checks
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath ./bin/ChargeTrail.exe -ArgumentList '--self-test', 'selftest.log' -PassThru -Wait
+          Get-Content ./selftest.log
+          if ($process.ExitCode -ne 0) { throw 'Core checks failed.' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChargeTrail-windows-x64
+          path: bin/ChargeTrail.exe
